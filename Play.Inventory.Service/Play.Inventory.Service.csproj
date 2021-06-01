@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Play.Common" Version="1.0.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="5.6.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Play.Inventory.Entities\Play.Inventory.Entities.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Play.Common">
+      <HintPath>..\..\..\Play.Common\Play.Common\Play.Common\bin\Debug\netstandard2.1\Play.Common.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
