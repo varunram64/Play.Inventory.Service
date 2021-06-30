@@ -4,9 +4,9 @@ namespace Play.Inventory.Service
 {
     public static class Extensions
     {
-        public static InventoryItemDTO AsDTO(this InventoryItem item)
+        public static InventoryItemDTO AsDTO(this InventoryItem item, string Name, string Description)
         {
-            return new InventoryItemDTO(item.CategoryItemId, item.Quantity, item.AcquiredDate);
+            return new InventoryItemDTO(item.CategoryItemId, Name, Description, item.Quantity, item.AcquiredDate);
         }
     }
 }

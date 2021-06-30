@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Play.Common.IRepository;
+using Play.Common;
 using Play.Inventory.Entities;
+using Play.Inventory.Service.Clients;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,11 +13,13 @@ namespace Play.Inventory.Service.Controllers
     [ApiController]
     public class ItemsController : ControllerBase
     {
-        private readonly IMongoRepository<InventoryItem> _mongoRepository;
+        private readonly IRepository<InventoryItem> _mongoRepository;
+        private readonly CatalogClient _catalogClient;
 
-        public ItemsController(IMongoRepository<InventoryItem> mongoRepository)
+        public ItemsController(IRepository<InventoryItem> mongoRepository, CatalogClient catalogClient)
         {
             _mongoRepository = mongoRepository;
+            _catalogClient = catalogClient;
         }
 
         [HttpGet]
@@ -25,10 +28,16 @@ namespace Play.Inventory.Service.Controllers
             if (userId == Guid.Empty)
                 return BadRequest();
 
-            var items = (await _mongoRepository.GetAll(item => item.UserId == userId))
-                        .Select(x => x.AsDTO());
-            if (items == null || (items != null && items.Count() == 0))
-                return NotFound();
+            var catalogItems = await _catalogClient.GetCatalogItemsAsync();
+
+            var items = (await _mongoRepository.GetAllAsync(item => item.UserId == userId))
+                        .Select(x => {
+                            var catalogItem = catalogItems.FirstOrDefault(y => y.id == x.CategoryItemId);
+                            return x.AsDTO(catalogItem.Name, catalogItem.Description);
+                        }).ToList();
+
+            if (items == null || (items != null && items.Count == 0))
+                return NoContent();
 
             return Ok(items);
         }
@@ -36,11 +45,12 @@ namespace Play.Inventory.Service.Controllers
         [HttpPost]
         public async Task<ActionResult<InventoryItemDTO>> PostAsync(GrantItemsDTO grantItemsDTO)
         {
-            var inventoryItem = await _mongoRepository.Get(item => item.UserId == grantItemsDTO.UserId && item.CategoryItemId == grantItemsDTO.CategoryItemId);
+            var catalogItems = await _catalogClient.GetCatalogItemsAsync();
+            var inventoryItem = await _mongoRepository.GetAsync(item => item.UserId == grantItemsDTO.UserId && item.CategoryItemId == grantItemsDTO.CategoryItemId);
             if(inventoryItem != null)
             {
                 inventoryItem.Quantity += grantItemsDTO.Quantity;
-                await _mongoRepository.Update(inventoryItem);
+                await _mongoRepository.UpdateAsync(inventoryItem);
             }
             else
             {
@@ -52,10 +62,11 @@ namespace Play.Inventory.Service.Controllers
                     AcquiredDate = DateTimeOffset.Now
                 };
 
-                await _mongoRepository.Create(inventoryItem);
+                await _mongoRepository.CreateAsync(inventoryItem);
             }
 
-            return Ok(inventoryItem.AsDTO());
+            var catalogItem = catalogItems.FirstOrDefault(y => y.id == inventoryItem.CategoryItemId);
+            return Ok(inventoryItem.AsDTO(catalogItem.Name, catalogItem.Description));
         }
     }
 }
