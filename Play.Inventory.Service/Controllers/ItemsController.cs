@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Play.Common;
+using Play.Common.IRepository;
 using Play.Inventory.Entities;
 using Play.Inventory.Service.Clients;
 using System;
@@ -13,10 +13,10 @@ namespace Play.Inventory.Service.Controllers
     [ApiController]
     public class ItemsController : ControllerBase
     {
-        private readonly IRepository<InventoryItem> _mongoRepository;
+        private readonly IMongoRepository<InventoryItem> _mongoRepository;
         private readonly CatalogClient _catalogClient;
 
-        public ItemsController(IRepository<InventoryItem> mongoRepository, CatalogClient catalogClient)
+        public ItemsController(IMongoRepository<InventoryItem> mongoRepository, CatalogClient catalogClient)
         {
             _mongoRepository = mongoRepository;
             _catalogClient = catalogClient;
@@ -30,11 +30,17 @@ namespace Play.Inventory.Service.Controllers
 
             var catalogItems = await _catalogClient.GetCatalogItemsAsync();
 
-            var items = (await _mongoRepository.GetAllAsync(item => item.UserId == userId))
-                        .Select(x => {
+            var items = (await _mongoRepository.GetAll(item => item.UserId == userId))
+                        .Select(x =>
+                        {
                             var catalogItem = catalogItems.FirstOrDefault(y => y.id == x.CategoryItemId);
-                            return x.AsDTO(catalogItem.Name, catalogItem.Description);
+                            if (catalogItem != null)
+                                return x.AsDTO(catalogItem.Name, catalogItem.Description);
+                            return null;
                         }).ToList();
+
+            if (items != null && items.Count > 0)
+                items = items.Where(x => x != null).ToList();
 
             if (items == null || (items != null && items.Count == 0))
                 return NoContent();
@@ -46,11 +52,11 @@ namespace Play.Inventory.Service.Controllers
         public async Task<ActionResult<InventoryItemDTO>> PostAsync(GrantItemsDTO grantItemsDTO)
         {
             var catalogItems = await _catalogClient.GetCatalogItemsAsync();
-            var inventoryItem = await _mongoRepository.GetAsync(item => item.UserId == grantItemsDTO.UserId && item.CategoryItemId == grantItemsDTO.CategoryItemId);
-            if(inventoryItem != null)
+            var inventoryItem = await _mongoRepository.Get(item => item.UserId == grantItemsDTO.UserId && item.CategoryItemId == grantItemsDTO.CategoryItemId);
+            if (inventoryItem != null)
             {
                 inventoryItem.Quantity += grantItemsDTO.Quantity;
-                await _mongoRepository.UpdateAsync(inventoryItem);
+                await _mongoRepository.Update(inventoryItem);
             }
             else
             {
@@ -62,7 +68,7 @@ namespace Play.Inventory.Service.Controllers
                     AcquiredDate = DateTimeOffset.Now
                 };
 
-                await _mongoRepository.CreateAsync(inventoryItem);
+                await _mongoRepository.Create(inventoryItem);
             }
 
             var catalogItem = catalogItems.FirstOrDefault(y => y.id == inventoryItem.CategoryItemId);
