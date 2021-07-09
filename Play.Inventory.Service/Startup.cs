@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
 using Play.Common;
+using Play.Common.MassTransit;
 using Play.Inventory.Entities;
 using Play.Inventory.Service.Clients;
 using Polly;
@@ -35,8 +36,22 @@ namespace Play.Inventory.Service
             if (catalogServiceDictionary["APITimeout"] != null)
                 int.TryParse(catalogServiceDictionary["APITimeout"].ToString(), out APITimeout);
             services.AddMongo()
-                .AddMongoRepository<InventoryItem>("InventoryItems");
+                .AddMongoRepository<InventoryItem>("InventoryItems")
+                .AddMongoRepository<CatalogItem>("CatalogItems")
+                .AddMassTransitWithRabbitMq();
 
+            services.AddControllers(c =>
+            {
+                c.SuppressAsyncSuffixInActionNames = false;
+            });
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Play.Inventory.Service", Version = "v1" });
+            });
+        }
+
+        private void AddCatalogClient(IServiceCollection services, int APITimeout)
+        {
             Random jitterer = new Random();
 
             services.AddHttpClient<CatalogClient>(client =>
@@ -63,7 +78,7 @@ namespace Play.Inventory.Service
                     ?
                     .LogWarning($"Opening the circuit for {timespan.TotalSeconds} seconds...");
                 },
-                onReset: () => 
+                onReset: () =>
                 {
                     var serviceProvider = services.BuildServiceProvider();
                     serviceProvider.GetService<ILogger<CatalogClient>>()
@@ -72,15 +87,6 @@ namespace Play.Inventory.Service
                 }
             ))
             .AddPolicyHandler(Policy.TimeoutAsync<HttpResponseMessage>(APITimeout));
-
-            services.AddControllers(c =>
-            {
-                c.SuppressAsyncSuffixInActionNames = false;
-            });
-            services.AddSwaggerGen(c =>
-            {
-                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Play.Inventory.Service", Version = "v1" });
-            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
